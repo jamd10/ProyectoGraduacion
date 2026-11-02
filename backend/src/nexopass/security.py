@@ -99,7 +99,7 @@ def current_user(request: Request, connection=Depends(db)):
 
 def roles_for(connection, user_id):
     roles = list(connection.execute(select(s.user_roles.c.role_code).where(s.user_roles.c.user_id == user_id)).scalars())
-    if connection.execute(select(s.event_staff.c.user_id).where(s.event_staff.c.user_id == user_id).limit(1)).first():
+    if connection.execute(select(s.event_staff.c.user_id).where(s.event_staff.c.user_id == user_id, s.event_staff.c.disabled_at.is_(None)).limit(1)).first():
         roles.append("staff")
     return sorted(set(roles))
 

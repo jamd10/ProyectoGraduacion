@@ -87,18 +87,23 @@ def test_complete_blockchain_transfer_and_admission(api,engine,monkeypatch):
             qr=refreshed
             check=api.post('/api/v1/access/check',json={'token':qr})
             assert check.status_code==200 and check.json()['document_number']=='0801200000002'
-            denied=api.post('/api/v1/access/consume',json={'token':qr,'identity_matches':False})
+            friend_id=friend.get('/api/v1/auth/me').json()['id']
+            assert api.post('/api/v1/admin/events/'+event['id']+'/staff',json={'email':email}).status_code==200
+            denied=friend.post('/api/v1/access/consume',json={'token':qr,'identity_matches':False})
             assert denied.json()['status']=='denied'
             door=datetime.fromisoformat(event['doors_open_at'])
             current=web3.eth.get_block('latest')['timestamp']
             web3.provider.make_request('evm_increaseTime',[int(door.timestamp())-current+10]);web3.provider.make_request('evm_mine',[])
             monkeypatch.setattr('nexopass.access.now',lambda:datetime.fromtimestamp(door.timestamp()+10,door.tzinfo))
-            admission=api.post('/api/v1/access/consume',json={'token':qr,'identity_matches':True})
+            admission=friend.post('/api/v1/access/consume',json={'token':qr,'identity_matches':True})
             assert admission.status_code==200,admission.text
             assert admission.json()['status']=='pending'
             tick(settings,api.app.state.database)
             final=api.get('/api/v1/access/attempts/'+admission.json()['attempt_id'])
             assert final.json()['authorized'] is True,final.text
+            assert api.delete('/api/v1/admin/events/'+event['id']+'/staff/'+friend_id).status_code==200
+            assert friend.get('/api/v1/access/attempts/'+admission.json()['attempt_id']).status_code==403
+            assert 'staff' not in friend.get('/api/v1/auth/me').json()['roles']
             assert friend.get('/api/v1/tickets/'+ticket['id']).json()['status']=='used'
             assert api.post('/api/v1/access/consume',json={'token':qr,'identity_matches':True}).status_code in (400,409)
     finally:

@@ -14,17 +14,17 @@ router = APIRouter(prefix="/api/v1/access", tags=["Admission"])
 def staff_events(user=Depends(current_user), connection=Depends(db)):
     query = select(s.events.c.id, s.events.c.name, s.events.c.starts_at, s.events.c.status)
     if "admin" not in roles_for(connection, user["id"]):
-        query = query.join(s.event_staff, s.event_staff.c.event_id == s.events.c.id).where(s.event_staff.c.user_id == user["id"])
+        query = query.join(s.event_staff, s.event_staff.c.event_id == s.events.c.id).where(s.event_staff.c.user_id == user["id"], s.event_staff.c.disabled_at.is_(None))
     return list(connection.execute(query.order_by(s.events.c.starts_at)).mappings())
 
 
 def authorize_staff(connection, user, event_id):
-    assigned = connection.execute(select(s.event_staff.c.user_id).where(s.event_staff.c.user_id == user["id"], s.event_staff.c.event_id == event_id)).first()
+    assigned = connection.execute(select(s.event_staff.c.user_id).where(s.event_staff.c.user_id == user["id"], s.event_staff.c.event_id == event_id, s.event_staff.c.disabled_at.is_(None))).first()
     if not assigned and "admin" not in roles_for(connection, user["id"]):
         raise HTTPException(403, "No estás asignado a este concierto")
     if not assigned:
         from sqlalchemy.dialects.postgresql import insert
-        connection.execute(insert(s.event_staff).values(event_id=event_id, user_id=user["id"]).on_conflict_do_nothing())
+        connection.execute(insert(s.event_staff).values(event_id=event_id, user_id=user["id"]).on_conflict_do_update(index_elements=["event_id", "user_id"], set_={"disabled_at": None}))
 
 
 def lookup(connection, request, token, user):

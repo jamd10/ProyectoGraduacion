@@ -86,7 +86,7 @@ events = Table(
 event_staff = Table(
     "event_staff", metadata,
     Column("event_id", Uuid, ForeignKey("events.id"), primary_key=True),
-    Column("user_id", Uuid, ForeignKey("users.id"), primary_key=True), created(),
+    Column("user_id", Uuid, ForeignKey("users.id"), primary_key=True), Column("disabled_at", DateTime(timezone=True)), created(),
 )
 zones = Table(
     "zones", metadata, pk(), Column("event_id", Uuid, ForeignKey("events.id"), nullable=False),
