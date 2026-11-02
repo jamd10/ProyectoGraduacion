@@ -1,5 +1,6 @@
 """Configuración explícita por entorno; nunca cargar secretos al importar."""
 from typing import Literal
+from pathlib import Path
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -17,6 +18,22 @@ class Settings(BaseSettings):
     database_user: Literal["nexopass_app"] = "nexopass_app"
     database_password: SecretStr | None = Field(default=None, repr=False)
     database_connect_timeout: int = Field(default=3, ge=1, le=10)
+
+    data_directory: Path = Field(default_factory=lambda: Path.home() / "NexoPassData")
+    public_url: str = "http://127.0.0.1:8000"
+    encryption_key: SecretStr | None = Field(default=None, repr=False)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: SecretStr | None = Field(default=None, repr=False)
+    smtp_sender: str = "NexoPass <no-reply@nexopass.local>"
+    smtp_starttls: bool = True
+    chain_rpc_url: str = "http://127.0.0.1:8545"
+    chain_id: int = 31337
+    contract_address: str = ""
+    relayer_key: SecretStr | None = Field(default=None, repr=False)
+    frontend_directory: Path = Field(default_factory=lambda: Path(__file__).resolve().parents[3] / "frontend" / "dist")
+    worker_enabled: bool = True
 
     @property
     def docs_enabled(self) -> bool:
