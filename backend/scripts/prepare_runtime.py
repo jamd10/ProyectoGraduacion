@@ -38,10 +38,14 @@ def provision_runtime(admin_password, runtime_password, *, database="nexopass", 
         admin.execute(sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(ROLE)))
         # Permisos de cuentas: sin ventas, inventario, auditoría ni gestión de roles.
         permissions = {
-            "alembic_version": "SELECT", "roles": "SELECT", "user_roles": "SELECT", "event_staff": "SELECT",
+            "alembic_version": "SELECT", "roles": "SELECT", "user_roles": "SELECT", "event_staff": "SELECT, INSERT, DELETE",
             "users": "SELECT, INSERT, UPDATE", "wallets": "SELECT, INSERT, UPDATE",
             "sessions": "SELECT, INSERT, DELETE", "credentials": "SELECT, INSERT, UPDATE",
             "rate_limits": "SELECT, INSERT, UPDATE", "email_messages": "SELECT, INSERT, UPDATE",
+            "venues": "SELECT, INSERT, UPDATE, DELETE", "events": "SELECT, INSERT, UPDATE",
+            "zones": "SELECT, INSERT, UPDATE, DELETE", "inventory_units": "SELECT, INSERT, UPDATE, DELETE",
+            "allocations": "SELECT", "orders": "SELECT", "tickets": "SELECT",
+            "audit_entries": "SELECT, INSERT",
         }
         for table, privileges in permissions.items():
             admin.execute(sql.SQL("GRANT {} ON TABLE public.{} TO {}").format(
