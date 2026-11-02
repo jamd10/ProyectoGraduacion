@@ -38,6 +38,7 @@ class Attendee(BaseModel):
 
 class CheckoutInput(BaseModel):
     idempotency_key: UUID
+    expected_total: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     attendees: list[Attendee] = Field(min_length=1, max_length=6)
     method: Literal["card_demo", "crypto_demo"] = "card_demo"
     result: Literal["approved", "rejected", "pending"] = "approved"
@@ -153,6 +154,10 @@ def reserve(body: ReserveInput, request: Request, user=Depends(verified_user), c
         if body.unit_ids:
             raise HTTPException(422, "La entrada general se selecciona por cantidad")
         count = body.quantity
+    held_count = connection.execute(select(func.count()).select_from(s.allocations.join(s.reservations, s.reservations.c.id == s.allocations.c.reservation_id)).where(
+        s.reservations.c.buyer_id == user["id"], s.reservations.c.event_id == body.event_id, s.allocations.c.status.in_(["held", "committed"]))).scalar_one()
+    if held_count + count > 6:
+        raise HTTPException(409, "El límite es de seis boletos reservados o comprados por cuenta y concierto")
     units = connection.execute(query.order_by(s.inventory_units.c.id).limit(count).with_for_update(skip_locked=True)).mappings().all()
     if len(units) != count:
         raise HTTPException(409, "Uno de los lugares ya no está disponible. Actualiza el mapa.")
@@ -202,7 +207,7 @@ def checkout(reservation_id: UUID, body: CheckoutInput, request: Request, user=D
         s.reservations.c.buyer_id == user["id"]).with_for_update()).mappings().one_or_none()
     if not reservation:
         raise HTTPException(404, "Reserva no encontrada")
-    fingerprint = sha256(json.dumps({"reservation": str(reservation_id), "method": body.method,
+    fingerprint = sha256(json.dumps({"reservation": str(reservation_id), "method": body.method, "expected_total": str(body.expected_total),
         "attendees": [{**a.model_dump(mode="json", exclude={"document_number"}), "document_number": a.document_number.get_secret_value()} for a in body.attendees]}, sort_keys=True).encode()).digest()
     existing = connection.execute(select(s.orders).where(s.orders.c.buyer_id == user["id"], s.orders.c.idempotency_key == body.idempotency_key)).mappings().one_or_none()
     if existing:
@@ -219,6 +224,8 @@ def checkout(reservation_id: UUID, body: CheckoutInput, request: Request, user=D
         .where(s.allocations.c.reservation_id == reservation_id, s.allocations.c.status == "held").order_by(s.inventory_units.c.unit_number)).mappings().all()
     if len(units) != len(body.attendees) or not units:
         raise HTTPException(422, "Debes indicar un asistente por boleto")
+    if sum(u["price"] for u in units) != body.expected_total:
+        raise HTTPException(409, "El precio cambió. Libera la reserva y revisa el nuevo total antes de comprar.")
     wallet_id = connection.execute(select(s.wallets.c.id).where(s.wallets.c.user_id == user["id"], s.wallets.c.revoked_at.is_(None))).scalar_one()
     order = connection.execute(s.orders.insert().values(reservation_id=reservation_id, event_id=reservation["event_id"], buyer_id=user["id"],
         idempotency_key=body.idempotency_key, checkout_fingerprint=fingerprint, total=sum(u["price"] for u in units), currency=units[0]["currency"]).returning(s.orders)).mappings().one()
