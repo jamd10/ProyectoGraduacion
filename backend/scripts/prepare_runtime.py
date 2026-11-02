@@ -38,7 +38,7 @@ def provision_runtime(admin_password, runtime_password, *, database="nexopass", 
         admin.execute(sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(ROLE)))
         # Permisos por módulo: sin DDL, administración de roles ni cambios de auditoría.
         permissions = {
-            "alembic_version": "SELECT", "roles": "SELECT", "user_roles": "SELECT", "event_staff": "SELECT, INSERT, DELETE",
+            "alembic_version": "SELECT", "roles": "SELECT", "user_roles": "SELECT", "event_staff": "SELECT, INSERT, UPDATE",
             "users": "SELECT, INSERT, UPDATE", "wallets": "SELECT, INSERT, UPDATE",
             "sessions": "SELECT, INSERT, DELETE", "credentials": "SELECT, INSERT, UPDATE",
             "rate_limits": "SELECT, INSERT, UPDATE", "email_messages": "SELECT, INSERT, UPDATE",
@@ -53,6 +53,7 @@ def provision_runtime(admin_password, runtime_password, *, database="nexopass", 
         for table, privileges in permissions.items():
             admin.execute(sql.SQL("GRANT {} ON TABLE public.{} TO {}").format(
                 sql.SQL(privileges), sql.Identifier(table), sql.Identifier(ROLE)))
+        admin.execute(sql.SQL("REVOKE DELETE ON TABLE public.event_staff FROM {}").format(sql.Identifier(ROLE)))
         admin.execute(sql.SQL("REVOKE TEMPORARY ON DATABASE {} FROM PUBLIC").format(sql.Identifier(database)))
         # No DDL, membresías, escritura en roles ni permisos automáticos futuros.
 

@@ -33,6 +33,7 @@ def test_runtime_reads_revision_without_using_migrator(runtime_connection):
 @pytest.mark.parametrize("statement", [
     "INSERT INTO public.roles(code) VALUES ('forbidden')",
     "UPDATE public.audit_entries SET action='forbidden'",
+    "DELETE FROM public.event_staff",
     "CREATE TABLE public.runtime_forbidden (id integer)",
     "CREATE TEMP TABLE runtime_forbidden (id integer)",
     "CREATE ROLE nexopass_forbidden NOLOGIN",

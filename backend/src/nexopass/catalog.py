@@ -226,7 +226,7 @@ def assign_staff(event_id: UUID, body: StaffInput, user=Depends(admin_user), con
     staff = connection.execute(select(s.users.c.id).where(s.users.c.email == str(body.email).lower(), s.users.c.email_verified_at.is_not(None))).scalar_one_or_none()
     if not staff:
         raise HTTPException(404, "El usuario debe estar registrado y verificado")
-    connection.execute(insert(s.event_staff).values(event_id=event_id, user_id=staff).on_conflict_do_nothing())
+    connection.execute(insert(s.event_staff).values(event_id=event_id, user_id=staff).on_conflict_do_update(index_elements=["event_id", "user_id"], set_={"disabled_at": None}))
     audit(connection, user["id"], "staff.assigned", event_id, "event")
     return {"message": "Personal asignado"}
 
@@ -325,17 +325,16 @@ def admin_seats(event_id: UUID, zone_id: UUID, user=Depends(admin_user), connect
 @router.get("/admin/events/{event_id}/staff")
 def staff_list(event_id: UUID, user=Depends(admin_user), connection=Depends(db)):
     return list(connection.execute(select(s.users.c.id, s.users.c.email, s.users.c.full_name).join(s.event_staff,
-        s.event_staff.c.user_id == s.users.c.id).where(s.event_staff.c.event_id == event_id)).mappings())
+        s.event_staff.c.user_id == s.users.c.id).where(s.event_staff.c.event_id == event_id, s.event_staff.c.disabled_at.is_(None))).mappings())
 
 
 @router.delete("/admin/events/{event_id}/staff/{staff_id}")
 def remove_staff(event_id: UUID, staff_id: UUID, user=Depends(admin_user), connection=Depends(db)):
-    if connection.execute(select(s.admission_attempts.c.id).where(s.admission_attempts.c.event_id == event_id,
-        s.admission_attempts.c.staff_id == staff_id).limit(1)).first():
-        raise HTTPException(409, "La asignación tiene historial de acceso; no se elimina")
-    connection.execute(delete(s.event_staff).where(s.event_staff.c.event_id == event_id, s.event_staff.c.user_id == staff_id))
-    return {"message": "Asignación retirada"}
-
+    if not connection.execute(update(s.event_staff).where(s.event_staff.c.event_id == event_id, s.event_staff.c.user_id == staff_id,
+        s.event_staff.c.disabled_at.is_(None)).values(disabled_at=now())).rowcount:
+        raise HTTPException(404, "Asignación activa no encontrada")
+    audit(connection, user["id"], "staff.revoked", event_id, "event", {"staff_id": str(staff_id)})
+    return {"message": "Acceso retirado; se conserva el historial de validación"}
 
 @router.get("/admin/users")
 def user_list(user=Depends(admin_user), connection=Depends(db)):

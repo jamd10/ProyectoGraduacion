@@ -167,7 +167,7 @@ def run(port=8000, open_browser=True):
     try:
         with engine.connect() as connection:
             role,revision=connection.execute(text("SELECT current_user,version_num FROM public.alembic_version")).one()
-            if role!="nexopass_app" or revision!="0005":
+            if role!="nexopass_app" or revision!="0006":
                 raise RuntimeError("Revisa el usuario o aplica las migraciones pendientes.")
     finally:
         engine.dispose()

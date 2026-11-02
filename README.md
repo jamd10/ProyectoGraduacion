@@ -195,7 +195,7 @@ Los nombres de la tabla deben llevar el prefijo: por ejemplo, `NEXOPASS_DATABASE
 ```text
 backend/
   src/nexopass/       API, reglas, seguridad, consultas y trabajador
-  migrations/        Revisiones Alembic 0001 a 0005
+  migrations/        Revisiones Alembic 0001 a 0006
   tests/             Pruebas de PostgreSQL, permisos, API, EVM y recuperación
   scripts/           Preparación de base/rol y respaldo/restauración
   requirements.lock  Dependencias Python verificadas
@@ -249,7 +249,7 @@ Los archivos se guardan en `NexoPassData/uploads` y PostgreSQL conserva referenc
 
 ## Verificación y criterios de aceptación
 
-La entrega se verificó con **76 pruebas de backend**, una prueba integral de contrato con múltiples comprobaciones EVM, compilación TypeScript/Vite, navegación real en escritorio y móvil y una prueba de arranque y cierre completo.
+La entrega se verificó con **77 pruebas de backend**, una prueba integral de contrato con múltiples comprobaciones EVM, compilación TypeScript/Vite, navegación real en escritorio y móvil y una prueba de arranque y cierre completo.
 
 La suite cubre, entre otros:
 
@@ -257,6 +257,7 @@ La suite cubre, entre otros:
 - Sesiones, CSRF, verificación y recuperación con revocación de sesiones.
 - Rechazo de privilegios inyectados, campos desconocidos y nombres vacíos.
 - Permisos SQL limitados y auditoría sin UPDATE/DELETE.
+- Revocación inmediata del personal sin eliminar su historial de validación.
 - Pago rechazado y pendiente, liberación de inventario e idempotencia.
 - Revisión obligatoria si cambia un precio y límite por cuenta/concierto.
 - Emisión real, firma del propietario, límite de transferencia y QR anterior inválido.
