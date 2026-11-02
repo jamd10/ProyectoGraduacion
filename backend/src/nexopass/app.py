@@ -1,5 +1,6 @@
 """Factory de FastAPI. Importar este módulo no abre conexiones ni crea tablas."""
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+import asyncio
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -11,6 +12,10 @@ from nexopass.database import create_database_engine
 from nexopass.health import router as health_router
 from nexopass.auth import router as auth_router
 from nexopass.catalog import router as catalog_router
+from nexopass.commerce import router as commerce_router
+from nexopass.transfers import router as transfers_router
+from nexopass.access import router as access_router
+from nexopass.worker import run_worker
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -19,9 +24,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         engine = create_database_engine(settings)
         app.state.database = engine
+        task = asyncio.create_task(run_worker(settings, engine)) if engine is not None and settings.worker_enabled and settings.environment != "test" else None
         try:
             yield
         finally:
+            if task:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
             if engine is not None:
                 engine.dispose()
             app.state.database = None
@@ -35,6 +45,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(catalog_router)
+    app.include_router(commerce_router)
+    app.include_router(transfers_router)
+    app.include_router(access_router)
     app.state.settings = settings
     @app.middleware("http")
     async def request_safety(request: Request, call_next):

@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 router = APIRouter(prefix="/api/v1/health", tags=["Health"])
 logger = logging.getLogger(__name__)
 # Actualizar al incorporar una migración requerida por la aplicación.
-REQUIRED_SCHEMA_REVISION = "0004"
+REQUIRED_SCHEMA_REVISION = "0005"
 
 
 class HealthResponse(BaseModel):

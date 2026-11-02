@@ -44,7 +44,10 @@ def provision_runtime(admin_password, runtime_password, *, database="nexopass", 
             "rate_limits": "SELECT, INSERT, UPDATE", "email_messages": "SELECT, INSERT, UPDATE",
             "venues": "SELECT, INSERT, UPDATE, DELETE", "events": "SELECT, INSERT, UPDATE",
             "zones": "SELECT, INSERT, UPDATE, DELETE", "inventory_units": "SELECT, INSERT, UPDATE, DELETE",
-            "allocations": "SELECT", "orders": "SELECT", "tickets": "SELECT",
+            "allocations": "SELECT, INSERT, UPDATE", "orders": "SELECT, INSERT, UPDATE", "tickets": "SELECT, INSERT, UPDATE",
+            "reservations": "SELECT, INSERT, UPDATE", "order_items": "SELECT, INSERT", "payments": "SELECT, INSERT, UPDATE",
+            "nominations": "SELECT, INSERT, UPDATE", "transfers": "SELECT, INSERT, UPDATE",
+            "chain_operations": "SELECT, INSERT, UPDATE", "nft_bindings": "SELECT, INSERT", "admission_attempts": "SELECT, INSERT, UPDATE",
             "audit_entries": "SELECT, INSERT",
         }
         for table, privileges in permissions.items():
