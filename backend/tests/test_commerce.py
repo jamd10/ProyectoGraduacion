@@ -26,7 +26,7 @@ def buy(api, engine, result='approved'):
     seat = api.get(f'/api/v1/events/{event["id"]}/zones/{zone["id"]}/seats').json()[0]
     reserve = api.post('/api/v1/reservations', json={'event_id':event['id'],'zone_id':zone['id'],'unit_ids':[seat['unit_id']]})
     assert reserve.status_code == 201, reserve.text
-    body = {'idempotency_key':str(uuid4()),'attendees':[{'full_name':'Persona de prueba','email':api.get('/api/v1/auth/me').json()['email'],
+    body = {'idempotency_key':str(uuid4()),'expected_total':reserve.json()['total'],'attendees':[{'full_name':'Persona de prueba','email':api.get('/api/v1/auth/me').json()['email'],
         'document_type':'DNI','document_number':'0801199900001'}], 'method':'card_demo','result':result,
         'card_number':'4111111111111111','card_holder':'DEMO','expiry':'12/30','cvv':'123'}
     response=api.post('/api/v1/reservations/'+reserve.json()['id']+'/checkout',json=body)

@@ -284,3 +284,69 @@ async def upload_image(target: Literal["avatar", "poster", "venue", "map", "zone
     url = "/media/" + name
     connection.execute(update(table).where(table.c.id == entity_id).values(**{field: url}))
     return {"url": url}
+
+class ZoneEdit(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    price: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+    benefits: str = Field(default="", max_length=2000)
+    display_order: int = Field(default=0, ge=0)
+
+
+class UserStatus(BaseModel):
+    disabled: bool
+
+
+@router.put("/admin/venues/{venue_id}")
+def edit_venue(venue_id: UUID, body: VenueInput, user=Depends(admin_user), connection=Depends(db)):
+    from zoneinfo import ZoneInfo
+    try:
+        ZoneInfo(body.timezone)
+    except Exception:
+        raise HTTPException(422, "Zona horaria inválida")
+    if not connection.execute(update(s.venues).where(s.venues.c.id == venue_id).values(**body.model_dump())).rowcount:
+        raise HTTPException(404, "Recinto no encontrado")
+    return {"message": "Recinto actualizado"}
+
+
+@router.put("/admin/zones/{zone_id}")
+def edit_zone(zone_id: UUID, body: ZoneEdit, user=Depends(admin_user), connection=Depends(db)):
+    if not connection.execute(update(s.zones).where(s.zones.c.id == zone_id).values(**body.model_dump())).rowcount:
+        raise HTTPException(404, "Zona no encontrada")
+    audit(connection, user["id"], "zone.updated", zone_id, "zone")
+    return {"message": "Zona actualizada; las órdenes existentes conservan su precio"}
+
+
+@router.get("/admin/events/{event_id}/zones/{zone_id}/seats")
+def admin_seats(event_id: UUID, zone_id: UUID, user=Depends(admin_user), connection=Depends(db)):
+    return get_zone_seats(connection, event_id, zone_id)
+
+
+@router.get("/admin/events/{event_id}/staff")
+def staff_list(event_id: UUID, user=Depends(admin_user), connection=Depends(db)):
+    return list(connection.execute(select(s.users.c.id, s.users.c.email, s.users.c.full_name).join(s.event_staff,
+        s.event_staff.c.user_id == s.users.c.id).where(s.event_staff.c.event_id == event_id)).mappings())
+
+
+@router.delete("/admin/events/{event_id}/staff/{staff_id}")
+def remove_staff(event_id: UUID, staff_id: UUID, user=Depends(admin_user), connection=Depends(db)):
+    if connection.execute(select(s.admission_attempts.c.id).where(s.admission_attempts.c.event_id == event_id,
+        s.admission_attempts.c.staff_id == staff_id).limit(1)).first():
+        raise HTTPException(409, "La asignación tiene historial de acceso; no se elimina")
+    connection.execute(delete(s.event_staff).where(s.event_staff.c.event_id == event_id, s.event_staff.c.user_id == staff_id))
+    return {"message": "Asignación retirada"}
+
+
+@router.get("/admin/users")
+def user_list(user=Depends(admin_user), connection=Depends(db)):
+    return list(connection.execute(select(s.users.c.id, s.users.c.email, s.users.c.full_name, s.users.c.email_verified_at,
+        s.users.c.disabled_at, s.users.c.created_at).order_by(s.users.c.created_at.desc()).limit(200)).mappings())
+
+
+@router.patch("/admin/users/{user_id}/status")
+def disable_user(user_id: UUID, body: UserStatus, user=Depends(admin_user), connection=Depends(db)):
+    if user_id == user["id"] or "admin" in roles_for(connection, user_id):
+        raise HTTPException(409, "Las cuentas administrativas se gestionan desde la preparación local")
+    if not connection.execute(update(s.users).where(s.users.c.id == user_id).values(disabled_at=now() if body.disabled else None)).rowcount:
+        raise HTTPException(404, "Usuario no encontrado")
+    audit(connection, user["id"], "user.disabled" if body.disabled else "user.enabled", user_id, "user")
+    return {"message": "Estado de cuenta actualizado"}

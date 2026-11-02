@@ -6,6 +6,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 import hmac
+from starlette.staticfiles import StaticFiles
+from nexopass.static import FrontendFiles, UploadBodyLimit
 
 from nexopass.config import Settings
 from nexopass.database import create_database_engine
@@ -49,6 +51,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(transfers_router)
     app.include_router(access_router)
     app.state.settings = settings
+    app.add_middleware(UploadBodyLimit)
     @app.middleware("http")
     async def request_safety(request: Request, call_next):
         if request.method not in ("GET", "HEAD", "OPTIONS"):
@@ -67,6 +70,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Frame-Options"] = "DENY"
+        if not request.url.path.startswith(("/docs", "/openapi.json")):
+            response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; frame-ancestors 'none'"
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -84,4 +89,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def database_error(request, error):
         return JSONResponse({"detail": "Servicio temporalmente no disponible"}, status_code=503)
 
+    uploads = settings.data_directory / "uploads"
+    uploads.mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=uploads), name="media")
+    if settings.frontend_directory.is_dir():
+        app.mount("/", FrontendFiles(directory=settings.frontend_directory, html=True), name="frontend")
     return app
