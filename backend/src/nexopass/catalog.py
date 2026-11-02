@@ -8,20 +8,21 @@ from pydantic import BaseModel, Field, AwareDatetime, model_validator, EmailStr
 from sqlalchemy import select, update, delete, func, and_, exists
 
 from nexopass import schema as s
+from nexopass.inputs import InputModel
 from nexopass.security import db, current_user, admin_user, roles_for, audit, now
 from nexopass.availability import get_event_availability, get_zone_seats
 
 router = APIRouter(prefix="/api/v1", tags=["Events"])
 
 
-class VenueInput(BaseModel):
+class VenueInput(InputModel):
     name: str = Field(min_length=2, max_length=200)
     city: str = Field(min_length=2, max_length=120)
     address: str = Field(min_length=2, max_length=1000)
     timezone: str = "America/Tegucigalpa"
 
 
-class EventInput(BaseModel):
+class EventInput(InputModel):
     venue_id: UUID
     name: str = Field(min_length=2, max_length=200)
     description: str = Field(min_length=5, max_length=10000)
@@ -43,7 +44,7 @@ class EventInput(BaseModel):
         return self
 
 
-class ZoneInput(BaseModel):
+class ZoneInput(InputModel):
     name: str = Field(min_length=2, max_length=120)
     mode: Literal["seated", "general"]
     price: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
@@ -54,16 +55,16 @@ class ZoneInput(BaseModel):
     display_order: int = Field(default=0, ge=0)
 
 
-class BlockInput(BaseModel):
+class BlockInput(InputModel):
     enabled: bool
 
 
-class PositionInput(BaseModel):
+class PositionInput(InputModel):
     x: Decimal = Field(ge=0, le=1, decimal_places=6)
     y: Decimal = Field(ge=0, le=1, decimal_places=6)
 
 
-class StaffInput(BaseModel):
+class StaffInput(InputModel):
     email: EmailStr
 
 
@@ -285,14 +286,14 @@ async def upload_image(target: Literal["avatar", "poster", "venue", "map", "zone
     connection.execute(update(table).where(table.c.id == entity_id).values(**{field: url}))
     return {"url": url}
 
-class ZoneEdit(BaseModel):
+class ZoneEdit(InputModel):
     name: str = Field(min_length=2, max_length=120)
     price: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     benefits: str = Field(default="", max_length=2000)
     display_order: int = Field(default=0, ge=0)
 
 
-class UserStatus(BaseModel):
+class UserStatus(InputModel):
     disabled: bool
 
 

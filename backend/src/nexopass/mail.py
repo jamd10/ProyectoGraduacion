@@ -8,6 +8,9 @@ import secrets
 
 
 def queue_mail(connection, request, recipient, subject, body):
+    if request.app.state.settings.environment == "production" and not request.app.state.settings.smtp_host:
+        from fastapi import HTTPException
+        raise HTTPException(503, "Falta configurar el envío de correo")
     connection.execute(s.email_messages.insert().values(id=uuid4(), recipient=recipient.lower(),
         subject=subject, encrypted_body=cipher(request).encrypt(body.encode()),
         status="pending" if request.app.state.settings.smtp_host else "local"))

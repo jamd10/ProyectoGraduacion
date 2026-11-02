@@ -43,3 +43,8 @@ def test_lifespan_disposes_engine(monkeypatch):
         assert app.state.database is engine
         assert not engine.disposed
     assert engine.disposed and app.state.database is None
+
+
+def test_real_money_networks_are_rejected():
+    with pytest.raises(ValidationError):
+        Settings(chain_id=1)

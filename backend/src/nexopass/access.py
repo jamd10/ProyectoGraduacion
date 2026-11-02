@@ -34,6 +34,10 @@ def lookup(connection, request, token, user):
     if not credential:
         raise HTTPException(400, "QR inválido, vencido o ya utilizado")
     ticket = connection.execute(select(s.tickets).where(s.tickets.c.id == credential["ticket_id"]).with_for_update()).mappings().one()
+    credential = connection.execute(select(s.credentials).where(s.credentials.c.id == credential["id"],
+        s.credentials.c.expires_at > func.now(), s.credentials.c.revoked_at.is_(None), s.credentials.c.consumed_at.is_(None)).with_for_update()).mappings().one_or_none()
+    if not credential:
+        raise HTTPException(400, "QR renovado, vencido o utilizado")
     authorize_staff(connection, user, ticket["event_id"])
     event = connection.execute(select(s.events).where(s.events.c.id == ticket["event_id"])).mappings().one()
     if ticket["status"] != "active" or ticket["suspended"] or ticket["credential_version"] != credential["credential_version"] or event["status"] != "published":
@@ -79,4 +83,7 @@ def attempt(attempt_id: UUID, user=Depends(current_user), connection=Depends(db)
     if not row:
         raise HTTPException(404, "Validación no encontrada")
     authorize_staff(connection, user, row["event_id"])
-    return {"id": row["id"], "status": row["status"], "authorized": row["status"] == "confirmed"}
+    event_status = connection.execute(select(s.events.c.status).where(s.events.c.id == row["event_id"])).scalar_one()
+    ticket = connection.execute(select(s.tickets.c.status, s.tickets.c.suspended).where(s.tickets.c.id == row["ticket_id"])).one()
+    authorized = row["status"] == "confirmed" and event_status == "published" and ticket.status == "used" and not ticket.suspended
+    return {"id": row["id"], "status": row["status"], "authorized": authorized}
