@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import solc from 'solc';
+const input = {language:'Solidity',sources:{'NexoPass.sol':{content:fs.readFileSync(new URL('./src/NexoPass.sol',import.meta.url),'utf8')}},settings:{optimizer:{enabled:true,runs:200},evmVersion:'shanghai',outputSelection:{'*':{'*':['abi','evm.bytecode.object']}}}};
+const output=JSON.parse(solc.compile(JSON.stringify(input),{import(name){try{return {contents:fs.readFileSync(new URL('./node_modules/'+name,import.meta.url),'utf8')}}catch{return {error:'Import unavailable: '+name}}}}));
+for(const error of output.errors??[]) if(error.severity==='error') throw new Error(error.formattedMessage);
+const contract=output.contracts['NexoPass.sol'].NexoPass;
+fs.mkdirSync(new URL('./artifacts/',import.meta.url),{recursive:true});
+fs.writeFileSync(new URL('./artifacts/NexoPass.json',import.meta.url),JSON.stringify({abi:contract.abi,bytecode:'0x'+contract.evm.bytecode.object}));
+console.log('Contrato NexoPass compilado.');
