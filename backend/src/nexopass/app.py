@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from nexopass.config import Settings
 from nexopass.database import create_database_engine
+from nexopass.health import router as health_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -25,5 +26,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
+    app.include_router(health_router)
     app.state.settings = settings
     return app

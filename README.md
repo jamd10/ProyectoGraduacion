@@ -246,7 +246,7 @@ Descripción breve de lo realizado.
 
 ## Estado actual
 
-Especificación y modelo relacional inicial con migración Alembic y pruebas de integridad en PostgreSQL. Todavía no hay API, frontend ni contrato desplegado. La creación de la base local requiere autenticación explícita del propietario.
+Modelo relacional con tres migraciones aplicadas y base de API FastAPI implementada: configuración, conexión limitada y endpoints de salud. Todavía no hay registro de usuarios, compras, frontend ni contrato desplegado.
 
 ## Referencias técnicas
 
@@ -504,3 +504,32 @@ Variables de la aplicación:
 Las conexiones se crean en el ciclo de vida de FastAPI y se liberan al cerrar. No se ejecuta DDL desde la aplicación. El pool y las consultas tienen límites de espera, y las credenciales se ocultan en las representaciones de configuración y del engine. Sin contraseña configurada no se intenta usar credenciales implícitas de PostgreSQL.
 
 Pruebas de esta etapa: 47 aprobadas en una base aislada, incluidas comprobaciones reales de las acciones permitidas y denegadas al rol de ejecución. Para ejecutar la suite completa se requieren `NEXOPASS_TEST_DATABASE_URL` y `NEXOPASS_TEST_RUNTIME_PASSWORD`, apuntando a una base de pruebas migrada y con su rol provisionado.
+## Salud y arranque local de la API (PG#4)
+
+| Endpoint | Respuesta |
+| --- | --- |
+| `GET /api/v1/health/live` | `200`, `{"status":"ok"}` cuando el proceso sirve solicitudes; no consulta PostgreSQL. |
+| `GET /api/v1/health/ready` | `200`, `{"status":"ready"}` cuando conecta como `nexopass_app` y encuentra la revisión requerida `0003`. |
+| `GET /api/v1/health/ready` con fallo | `503`, `{"status":"not_ready"}` si faltan credenciales, falla la conexión o no coincide el rol/revisión. |
+
+Las respuestas usan `Cache-Control: no-store`. No exponen host, nombre de base, usuario, revisión, consultas SQL ni detalles de excepciones. Los logs de salud conservan únicamente códigos de incidencia. Estos endpoints no certifican todavía disponibilidad de correo, billeteras o blockchain: esos componentes no están integrados.
+
+Para iniciar desde cualquier carpeta de PowerShell sin escribir contraseñas en el historial:
+
+```powershell
+& 'C:\Users\jamdj\NexoPassTools\venv\Scripts\python.exe' -B 'C:\Users\jamdj\Downloads\Proyecto de graduacion\ProyectoGraduacion\backend\scripts\run_api.py'
+```
+
+El script solicita de forma oculta la contraseña de `nexopass_app` si no se proporcionó mediante el entorno. Escucha únicamente en `127.0.0.1:8000`. Se detiene con `Ctrl+C`; `--port` permite elegir otro puerto. No se instala como servicio ni queda un proceso de prueba ejecutándose.
+
+- Documentación de desarrollo: `http://127.0.0.1:8000/docs`.
+- Liveness: `http://127.0.0.1:8000/api/v1/health/live`.
+- Readiness: `http://127.0.0.1:8000/api/v1/health/ready`.
+
+La factory también permite el arranque por Uvicorn documentado en PG#2. En ese caso, sin `NEXOPASS_DATABASE_PASSWORD`, el proceso puede responder pero readiness permanece en `503`; no recurre al administrador ni al migrador.
+
+Cada futura migración requerida por la API debe actualizar `REQUIRED_SCHEMA_REVISION` y sus pruebas. Una base atrasada o con varias revisiones incompatibles no se comunica como lista. La API nunca aplica migraciones automáticamente.
+
+Validación de esta entrega: 55 pruebas aprobadas sobre una base aislada, incluido rol real de ejecución, fallo real de conexión y respuestas sin filtración de datos sensibles. También se inició Uvicorn y se comprobaron por HTTP liveness, readiness y documentación contra PostgreSQL local. Los datos de negocio existentes se conservaron; no se crearon conciertos, boletos ni cuentas de aplicación de demostración.
+
+Próximo módulo: registro, verificación de correo e inicio de sesión, con los permisos específicos que necesite y pruebas de autorización.
