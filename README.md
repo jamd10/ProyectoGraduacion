@@ -484,3 +484,23 @@ $env:PYTHONPATH = "$PWD\src"
 ```
 
 Esta etapa prepara estructura y configuración; todavía no implementa cuentas, compras ni endpoints de negocio.
+## Conexión de ejecución y permisos (PG#3)
+
+La aplicación utiliza únicamente `nexopass_app`. Este rol no es administrador, no pertenece al migrador y no posee la base. Por ahora tiene `CONNECT`, `USAGE` del esquema y `SELECT` sobre `alembic_version`; no puede consultar usuarios, modificar auditoría, crear tablas ni roles, usar tablas temporales o asumir el rol migrador. No se conceden permisos automáticos sobre futuras tablas. Cada módulo de negocio deberá incorporar sus permisos explícitos.
+
+El script `backend/scripts/prepare_runtime.py` provisiona ese rol de forma interactiva sin guardar contraseñas, sin cambiar claves existentes y solo para bases de NexoPass. Se ha aplicado al servidor local y probado su reejecución. Las operaciones de migración siguen utilizando `nexopass_migrator`.
+
+Variables de la aplicación:
+
+| Variable | Valor predeterminado |
+| --- | --- |
+| `NEXOPASS_DATABASE_HOST` | `127.0.0.1` |
+| `NEXOPASS_DATABASE_PORT` | `5432` |
+| `NEXOPASS_DATABASE_NAME` | `nexopass` |
+| `NEXOPASS_DATABASE_USER` | `nexopass_app`; se rechazan usuarios administradores o migradores. |
+| `NEXOPASS_DATABASE_PASSWORD` | Sin valor predeterminado; secreto de ejecución. |
+| `NEXOPASS_DATABASE_CONNECT_TIMEOUT` | 3 segundos, configurable entre 1 y 10. |
+
+Las conexiones se crean en el ciclo de vida de FastAPI y se liberan al cerrar. No se ejecuta DDL desde la aplicación. El pool y las consultas tienen límites de espera, y las credenciales se ocultan en las representaciones de configuración y del engine. Sin contraseña configurada no se intenta usar credenciales implícitas de PostgreSQL.
+
+Pruebas de esta etapa: 47 aprobadas en una base aislada, incluidas comprobaciones reales de las acciones permitidas y denegadas al rol de ejecución. Para ejecutar la suite completa se requieren `NEXOPASS_TEST_DATABASE_URL` y `NEXOPASS_TEST_RUNTIME_PASSWORD`, apuntando a una base de pruebas migrada y con su rol provisionado.
