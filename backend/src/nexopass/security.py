@@ -41,6 +41,12 @@ def cipher(request: Request):
         return Fernet(settings.encryption_key.get_secret_value().encode())
     if settings.environment == "production":
         raise HTTPException(503, "Falta configurar la clave de cifrado")
+    if not (settings.data_directory / "master.key").exists() and not getattr(request.app.state, "allow_key_creation", True):
+        raise HTTPException(503, "Falta la clave local de cifrado; restaura su respaldo")
+    if not (settings.data_directory / "master.key").exists() and getattr(request.app.state, "database", None) is not None:
+        with request.app.state.database.connect() as connection:
+            if connection.execute(select(s.wallets.c.id).where(s.wallets.c.encrypted_private_key.is_not(None)).limit(1)).first():
+                raise HTTPException(503, "Falta la clave local de cifrado; restaura su respaldo")
     return local_cipher(str(settings.data_directory))
 
 

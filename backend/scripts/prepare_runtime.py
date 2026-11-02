@@ -1,6 +1,6 @@
 """Provisionar exclusivamente el rol de ejecución local de NexoPass.
 
-Concede únicamente los permisos explícitos necesarios para las cuentas.
+Concede únicamente permisos explícitos de los módulos implementados.
 Las futuras funciones de negocio deberán añadir permisos de forma explícita.
 """
 import argparse
@@ -36,7 +36,7 @@ def provision_runtime(admin_password, runtime_password, *, database="nexopass", 
             admin.execute(sql.SQL("CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD {}").format(sql.Identifier(ROLE), sql.Literal(runtime_password)))
         admin.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(sql.Identifier(database), sql.Identifier(ROLE)))
         admin.execute(sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(ROLE)))
-        # Permisos de cuentas: sin ventas, inventario, auditoría ni gestión de roles.
+        # Permisos por módulo: sin DDL, administración de roles ni cambios de auditoría.
         permissions = {
             "alembic_version": "SELECT", "roles": "SELECT", "user_roles": "SELECT", "event_staff": "SELECT, INSERT, DELETE",
             "users": "SELECT, INSERT, UPDATE", "wallets": "SELECT, INSERT, UPDATE",
@@ -71,7 +71,7 @@ def main():
     except Exception:
         print("No se pudo provisionar el rol; revisa credenciales, migraciones y permisos. No se cambian contraseñas existentes.")
         return 1
-    print("nexopass_app listo: permisos explícitos de cuentas, sin administración ni cambios de estructura.")
+    print("nexopass_app listo: permisos explícitos de negocio, sin administración ni cambios de estructura.")
     return 0
 
 

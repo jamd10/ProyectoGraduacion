@@ -2,7 +2,7 @@
 from typing import Literal
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     relayer_key: SecretStr | None = Field(default=None, repr=False)
     frontend_directory: Path = Field(default_factory=lambda: Path(__file__).resolve().parents[3] / "frontend" / "dist")
     worker_enabled: bool = True
+
+    @field_validator("chain_id")
+    @classmethod
+    def test_network_only(cls, value):
+        if value not in (31337, 11155111):
+            raise ValueError("NexoPass solo admite la cadena local o Sepolia de pruebas")
+        return value
 
     @property
     def docs_enabled(self) -> bool:

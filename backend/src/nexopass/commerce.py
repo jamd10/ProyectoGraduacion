@@ -10,33 +10,42 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr, Field, SecretStr, model_validator
+from pydantic import BaseModel, EmailStr, Field, SecretStr, model_validator, field_validator
 from sqlalchemy import select, update, func, exists, and_, delete
 from sqlalchemy.dialects.postgresql import insert
 import qrcode
 
 from nexopass import schema as s
+from nexopass.inputs import InputModel
 from nexopass.security import db, current_user, verified_user, admin_user, cipher, digest, now, audit, limited, roles_for
 from nexopass.mail import queue_mail
 
 router = APIRouter(prefix="/api/v1", tags=["Tickets"])
 
 
-class ReserveInput(BaseModel):
+class ReserveInput(InputModel):
     event_id: UUID
     zone_id: UUID
     unit_ids: list[UUID] = Field(default_factory=list, max_length=6)
     quantity: int = Field(default=1, ge=1, le=6)
 
 
-class Attendee(BaseModel):
+class Attendee(InputModel):
     full_name: str = Field(min_length=2, max_length=200)
     email: EmailStr
     document_type: Literal["DNI", "PASSPORT", "OTHER"] = "DNI"
     document_number: SecretStr = Field(min_length=4, max_length=40)
 
+    @field_validator("document_number")
+    @classmethod
+    def meaningful_document(cls, value):
+        text = value.get_secret_value().strip()
+        if len(text) < 4:
+            raise ValueError("Escribe un documento válido")
+        return SecretStr(text)
 
-class CheckoutInput(BaseModel):
+
+class CheckoutInput(InputModel):
     idempotency_key: UUID
     expected_total: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     attendees: list[Attendee] = Field(min_length=1, max_length=6)
@@ -59,15 +68,15 @@ class CheckoutInput(BaseModel):
         return self
 
 
-class PaymentResolution(BaseModel):
+class PaymentResolution(InputModel):
     result: Literal["approved", "rejected"]
 
 
-class TransferInput(BaseModel):
+class TransferInput(InputModel):
     email: EmailStr
 
 
-class TokenInput(BaseModel):
+class TokenInput(InputModel):
     token: str = Field(min_length=20, max_length=200)
 
 
@@ -101,7 +110,7 @@ def ticket_detail(connection, ticket):
       .where(s.tickets.c.id == ticket_id)).mappings().one()
     result = dict(row)
     binding = connection.execute(select(s.nft_bindings).where(s.nft_bindings.c.ticket_id == ticket_id)).mappings().one_or_none()
-    result["nft"] = dict(binding) if binding else None
+    result["nft"] = {**dict(binding), "token_id": str(binding["token_id"])} if binding else None
     operations = connection.execute(select(s.chain_operations.c.kind, s.chain_operations.c.status, s.chain_operations.c.tx_hash,
         s.chain_operations.c.block_number, s.chain_operations.c.failure_code).where(s.chain_operations.c.ticket_id == ticket_id)
         .order_by(s.chain_operations.c.created_at)).mappings().all()
@@ -176,6 +185,12 @@ def release(reservation_id: UUID, user=Depends(current_user), connection=Depends
         raise HTTPException(409, "La reserva ya está cerrada")
     connection.execute(update(s.allocations).where(s.allocations.c.reservation_id == reservation_id, s.allocations.c.status == "held").values(status="released"))
     connection.execute(update(s.reservations).where(s.reservations.c.id == reservation_id).values(status="cancelled"))
+    order_ids = list(connection.execute(select(s.orders.c.id).where(s.orders.c.reservation_id == reservation_id, s.orders.c.status == "pending_payment")).scalars())
+    for order_id in order_ids:
+        connection.execute(update(s.orders).where(s.orders.c.id == order_id).values(status="cancelled"))
+        connection.execute(update(s.payments).where(s.payments.c.order_id == order_id, s.payments.c.status == "pending").values(status="rejected"))
+        item_ids = select(s.order_items.c.id).where(s.order_items.c.order_id == order_id)
+        connection.execute(update(s.tickets).where(s.tickets.c.order_item_id.in_(item_ids)).values(status="cancelled"))
     return {"message": "Reserva liberada"}
 
 
@@ -207,7 +222,7 @@ def checkout(reservation_id: UUID, body: CheckoutInput, request: Request, user=D
         s.reservations.c.buyer_id == user["id"]).with_for_update()).mappings().one_or_none()
     if not reservation:
         raise HTTPException(404, "Reserva no encontrada")
-    fingerprint = sha256(json.dumps({"reservation": str(reservation_id), "method": body.method, "expected_total": str(body.expected_total),
+    fingerprint = sha256(json.dumps({"reservation": str(reservation_id), "method": body.method, "expected_total": format(body.expected_total, ".2f"),
         "attendees": [{**a.model_dump(mode="json", exclude={"document_number"}), "document_number": a.document_number.get_secret_value()} for a in body.attendees]}, sort_keys=True).encode()).digest()
     existing = connection.execute(select(s.orders).where(s.orders.c.buyer_id == user["id"], s.orders.c.idempotency_key == body.idempotency_key)).mappings().one_or_none()
     if existing:

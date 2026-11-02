@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def context(settings):
-    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings)))
+    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings, allow_key_creation=False)))
 
 
 def deliver_mail(settings, engine):
@@ -31,6 +31,8 @@ def deliver_mail(settings, engine):
             .order_by(s.email_messages.c.created_at).limit(5).with_for_update(skip_locked=True)).mappings().all()
         for row in messages:
             try:
+                if settings.smtp_user and not settings.smtp_starttls and settings.smtp_host not in ("127.0.0.1", "localhost"):
+                    raise RuntimeError("Se requiere TLS para autenticar SMTP remoto")
                 message = EmailMessage()
                 message["From"] = settings.smtp_sender
                 message["To"] = row["recipient"]

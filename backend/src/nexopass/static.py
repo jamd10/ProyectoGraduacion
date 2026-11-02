@@ -8,7 +8,7 @@ from starlette.staticfiles import StaticFiles
 class FrontendFiles(StaticFiles):
     async def get_response(self, path, scope):
         path = path.replace("\\", "/").lstrip("/")
-        if path.startswith("api/") or path in ("docs", "redoc", "openapi.json"):
+        if path == "api" or path.startswith("api/") or path in ("docs", "redoc", "openapi.json"):
             raise HTTPException(404, "No encontrado")
         try:
             return await super().get_response(path, scope)

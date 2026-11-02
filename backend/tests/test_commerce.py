@@ -1,6 +1,6 @@
 import os
 import re
-from uuid import uuid4
+from uuid import UUID, uuid4
 from datetime import datetime
 
 from fastapi.testclient import TestClient
@@ -65,6 +65,7 @@ def test_complete_blockchain_transfer_and_admission(api,engine,monkeypatch):
         ticket=api.get('/api/v1/tickets/'+ticket['id']).json()
         assert ticket['status']=='active',ticket
         assert ticket['nft'] and ticket['operations'][0]['status']=='confirmed'
+        assert ticket['nft']['token_id']==str(int(UUID(ticket['id'])))
         old_qr=api.post('/api/v1/tickets/'+ticket['id']+'/qr').json()['token']
         with TestClient(create_app(settings),client=('friend-'+uuid4().hex,50000)) as friend:
             email,_=account(friend);verify(friend)
@@ -80,6 +81,10 @@ def test_complete_blockchain_transfer_and_admission(api,engine,monkeypatch):
             assert api.post('/api/v1/access/check',json={'token':old_qr}).status_code==400
             assert friend.post('/api/v1/tickets/'+ticket['id']+'/transfers',json={'email':'other@example.com'}).status_code==409
             qr=friend.post('/api/v1/tickets/'+ticket['id']+'/qr').json()['token']
+            assert friend.post('/api/v1/access/check',json={'token':qr}).status_code==403
+            refreshed=friend.post('/api/v1/tickets/'+ticket['id']+'/qr').json()['token']
+            assert api.post('/api/v1/access/check',json={'token':qr}).status_code==400
+            qr=refreshed
             check=api.post('/api/v1/access/check',json={'token':qr})
             assert check.status_code==200 and check.json()['document_number']=='0801200000002'
             denied=api.post('/api/v1/access/consume',json={'token':qr,'identity_matches':False})
@@ -98,3 +103,35 @@ def test_complete_blockchain_transfer_and_admission(api,engine,monkeypatch):
             assert api.post('/api/v1/access/consume',json={'token':qr,'identity_matches':True}).status_code in (400,409)
     finally:
         web3.provider.make_request('evm_revert',[snapshot])
+
+
+def test_pending_order_is_cancelled_when_reservation_released(api,engine):
+    event,zone,ticket,order=buy(api,engine,'pending')
+    with engine.connect() as connection:
+        reservation=connection.execute(select(s.orders.c.reservation_id).where(s.orders.c.id==UUID(order['order_id']))).scalar_one()
+    assert api.delete('/api/v1/reservations/'+str(reservation)).status_code==200
+    assert api.get('/api/v1/me/orders').json()[0]['status']=='cancelled'
+    assert api.get('/api/v1/me/tickets').json()[0]['status']=='cancelled'
+    assert api.get('/api/v1/events/'+event['id']).json()['availability']['zones'][0]['available']==12
+
+
+def test_price_change_requires_customer_to_review_new_total(api,engine):
+    event,zone=create_concert(api,engine);verify(api)
+    seats=api.get(f'/api/v1/events/{event["id"]}/zones/{zone["id"]}/seats').json()
+    reservation=api.post('/api/v1/reservations',json={'event_id':event['id'],'zone_id':zone['id'],'unit_ids':[seats[0]['unit_id']]}).json()
+    assert api.put('/api/v1/admin/zones/'+zone['id'],json={'name':'VIP','price':'700.00','benefits':'','display_order':0}).status_code==200
+    response=api.post('/api/v1/reservations/'+reservation['id']+'/checkout',json={'idempotency_key':str(uuid4()),'expected_total':reservation['total'],
+        'method':'crypto_demo','attendees':[{'full_name':'Persona de prueba','email':api.get('/api/v1/auth/me').json()['email'],'document_number':'DEMO-TEST'}]})
+    assert response.status_code==409
+    assert api.get('/api/v1/me/orders').json()==[]
+
+
+def test_per_account_event_limit_is_released_on_cancel(api,engine):
+    event,zone=create_concert(api,engine);verify(api)
+    seats=api.get(f'/api/v1/events/{event["id"]}/zones/{zone["id"]}/seats').json()
+    first=api.post('/api/v1/reservations',json={'event_id':event['id'],'zone_id':zone['id'],'unit_ids':[seat['unit_id'] for seat in seats[:6]]})
+    assert first.status_code==201
+    next_body={'event_id':event['id'],'zone_id':zone['id'],'unit_ids':[seats[6]['unit_id']]}
+    assert api.post('/api/v1/reservations',json=next_body).status_code==409
+    assert api.delete('/api/v1/reservations/'+first.json()['id']).status_code==200
+    assert api.post('/api/v1/reservations',json=next_body).status_code==201

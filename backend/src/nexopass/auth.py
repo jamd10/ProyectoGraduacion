@@ -10,28 +10,29 @@ from sqlalchemy import select, update, delete, func
 from sqlalchemy.dialects.postgresql import insert
 
 from nexopass import schema as s
+from nexopass.inputs import InputModel
 from nexopass.security import db, current_user, hasher, DUMMY_HASH, cipher, digest, now, roles_for, limited
 from nexopass.mail import issue_token
 
 router = APIRouter(prefix="/api/v1", tags=["Accounts"])
 
 
-class Registration(BaseModel):
+class Registration(InputModel):
     full_name: str = Field(min_length=2, max_length=200)
     email: EmailStr
     password: SecretStr = Field(min_length=10, max_length=128)
 
 
-class Login(BaseModel):
+class Login(InputModel):
     email: EmailStr
     password: SecretStr = Field(min_length=1, max_length=128)
 
 
-class EmailInput(BaseModel):
+class EmailInput(InputModel):
     email: EmailStr
 
 
-class TokenInput(BaseModel):
+class TokenInput(InputModel):
     token: str = Field(min_length=20, max_length=200)
 
 
@@ -39,7 +40,7 @@ class ResetInput(TokenInput):
     password: SecretStr = Field(min_length=10, max_length=128)
 
 
-class ProfileInput(BaseModel):
+class ProfileInput(InputModel):
     full_name: str = Field(min_length=2, max_length=200)
 
 
