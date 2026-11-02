@@ -472,3 +472,15 @@ Las asignaciones liberadas no afectan la disponibilidad. Una reserva vencida se 
 La lectura del mapa no reserva un asiento: la compra deberá revalidar y bloquear inventario. La actualización automática de la pantalla, zoom, selección, leyenda y navegación accesible quedan para la API y el frontend; todavía no hay endpoints ni interfaz implementados.
 
 Verificación: 32 pruebas aprobadas en PostgreSQL, incluyendo estados mixtos, liberación de reservas, inventario general, aislamiento entre conciertos, venta cerrada, posiciones válidas y reservas vencidas. La migración se aplicó, revirtió y reaplicó en una base aislada; posteriormente se aplicó a `nexopass`, conservando registros y sin diferencias con el modelo.
+## API: estructura inicial (PG#2)
+
+La API usa FastAPI mediante la factory `nexopass.app:create_app`. La configuración procede de variables con prefijo `NEXOPASS_`; no se cargan archivos de secretos implícitamente. `NEXOPASS_ENVIRONMENT` admite `development`, `test` y `production`. La documentación `/docs` y `/openapi.json` está disponible en desarrollo. Importar el módulo no crea tablas ni abre conexiones.
+
+Desde `backend`, con el entorno virtual preparado, se puede iniciar con:
+
+```powershell
+$env:PYTHONPATH = "$PWD\src"
+& "$env:USERPROFILE\NexoPassTools\venv\Scripts\python.exe" -B -m uvicorn nexopass.app:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+Esta etapa prepara estructura y configuración; todavía no implementa cuentas, compras ni endpoints de negocio.
