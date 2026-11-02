@@ -10,6 +10,7 @@ from nexopass.config import Settings
 from nexopass.database import create_database_engine
 from nexopass.health import router as health_router
 from nexopass.auth import router as auth_router
+from nexopass.catalog import router as catalog_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -33,6 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(catalog_router)
     app.state.settings = settings
     @app.middleware("http")
     async def request_safety(request: Request, call_next):
