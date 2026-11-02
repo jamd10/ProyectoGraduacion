@@ -14,3 +14,8 @@ build/
 dist/
 .coverage
 htmlcov/
+node_modules/
+contracts/artifacts/
+frontend/dist/
+playwright-report/
+test-results/
