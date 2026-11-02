@@ -16,7 +16,8 @@ def api(engine, tmp_path):
     settings = Settings(environment="test", database_host=engine.url.host,
         database_port=engine.url.port or 5432, database_name=engine.url.database,
         database_password=SecretStr(os.environ["NEXOPASS_TEST_RUNTIME_PASSWORD"]),
-        data_directory=tmp_path, worker_enabled=False)
+        data_directory=tmp_path, worker_enabled=False,
+        chain_rpc_url=os.environ.get("NEXOPASS_TEST_CHAIN_RPC_URL", "http://127.0.0.1:8545"))
     with TestClient(create_app(settings), client=("test-" + uuid4().hex, 50000)) as client:
         yield client
 
