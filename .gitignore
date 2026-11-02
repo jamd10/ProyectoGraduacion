@@ -1,0 +1,16 @@
+# Entornos y archivos locales sensibles
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Artefactos locales de Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
