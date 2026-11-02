@@ -1,6 +1,6 @@
 """Provisionar exclusivamente el rol de ejecución local de NexoPass.
 
-No concede escritura ni acceso a datos privados: por ahora solo hay salud.
+Concede únicamente los permisos explícitos necesarios para las cuentas.
 Las futuras funciones de negocio deberán añadir permisos de forma explícita.
 """
 import argparse
@@ -36,35 +36,18 @@ def provision_runtime(admin_password, runtime_password, *, database="nexopass", 
             admin.execute(sql.SQL("CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD {}").format(sql.Identifier(ROLE), sql.Literal(runtime_password)))
         admin.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(sql.Identifier(database), sql.Identifier(ROLE)))
         admin.execute(sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(ROLE)))
-        admin.execute(sql.SQL("GRANT SELECT ON TABLE public.alembic_version TO {}").format(sql.Identifier(ROLE)))
-        # No conceder permisos por defecto para tablas futuras ni usar ALL TABLES.
-        unsafe = admin.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-                WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m') AND (
-                    has_table_privilege(%s,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-                    OR (c.relname <> 'alembic_version' AND has_table_privilege(%s,c.oid,'SELECT'))
-                )
-            ) OR has_schema_privilege(%s,'public','CREATE')
-              OR has_database_privilege(%s,current_database(),'CREATE,TEMP')
-        """, (ROLE, ROLE, ROLE, ROLE)).fetchone()[0]
-        # Las bases nuevas de PostgreSQL suelen conceder TEMP a PUBLIC.
-        # Se revoca únicamente en la base NexoPass seleccionada.
-        if unsafe:
-            admin.execute(sql.SQL("REVOKE TEMPORARY ON DATABASE {} FROM PUBLIC").format(sql.Identifier(database)))
-            unsafe = admin.execute("""
-                SELECT EXISTS (
-                    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-                    WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m') AND (
-                        has_table_privilege(%s,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-                        OR (c.relname <> 'alembic_version' AND has_table_privilege(%s,c.oid,'SELECT'))
-                    )
-                ) OR has_schema_privilege(%s,'public','CREATE')
-                  OR has_database_privilege(%s,current_database(),'CREATE,TEMP')
-            """, (ROLE, ROLE, ROLE, ROLE)).fetchone()[0]
-            if unsafe:
-                raise RuntimeError("El rol conserva privilegios inesperados; se revierte la operación.")
-
+        # Permisos de cuentas: sin ventas, inventario, auditoría ni gestión de roles.
+        permissions = {
+            "alembic_version": "SELECT", "roles": "SELECT", "user_roles": "SELECT", "event_staff": "SELECT",
+            "users": "SELECT, INSERT, UPDATE", "wallets": "SELECT, INSERT, UPDATE",
+            "sessions": "SELECT, INSERT, DELETE", "credentials": "SELECT, INSERT, UPDATE",
+            "rate_limits": "SELECT, INSERT, UPDATE", "email_messages": "SELECT, INSERT, UPDATE",
+        }
+        for table, privileges in permissions.items():
+            admin.execute(sql.SQL("GRANT {} ON TABLE public.{} TO {}").format(
+                sql.SQL(privileges), sql.Identifier(table), sql.Identifier(ROLE)))
+        admin.execute(sql.SQL("REVOKE TEMPORARY ON DATABASE {} FROM PUBLIC").format(sql.Identifier(database)))
+        # No DDL, membresías, escritura en roles ni permisos automáticos futuros.
 
 def main():
     parser = argparse.ArgumentParser(description="Preparar el usuario limitado de NexoPass.")
@@ -81,7 +64,7 @@ def main():
     except Exception:
         print("No se pudo provisionar el rol; revisa credenciales, migraciones y permisos. No se cambian contraseñas existentes.")
         return 1
-    print("nexopass_app listo: conexión y lectura de revisión, sin acceso a datos privados ni cambios de estructura.")
+    print("nexopass_app listo: permisos explícitos de cuentas, sin administración ni cambios de estructura.")
     return 0
 
 

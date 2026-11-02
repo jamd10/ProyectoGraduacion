@@ -54,6 +54,7 @@ wallets = Table(
     "wallets", metadata, pk(),
     Column("user_id", Uuid, ForeignKey("users.id"), nullable=False, index=True),
     Column("address", String(42), nullable=False, unique=True),
+    Column("encrypted_private_key", LargeBinary),
     Column("kind", String(16), nullable=False),
     Column("verified_at", DateTime(timezone=True)),
     Column("revoked_at", DateTime(timezone=True)), created(),
@@ -234,6 +235,7 @@ Index("uq_transfers_live_ticket", transfers.c.ticket_id, unique=True,
 chain_operations = Table(
     "chain_operations", metadata, pk(),
     Column("ticket_id", Uuid, ForeignKey("tickets.id"), nullable=False, index=True),
+    Column("encrypted_private_key", LargeBinary),
     Column("kind", String(16), nullable=False), Column("idempotency_key", Uuid, nullable=False, unique=True),
     Column("chain_id", BigInteger, nullable=False), Column("contract_address", String(42), nullable=False),
     Column("tx_hash", String(66)), Column("block_number", BigInteger), Column("block_hash", String(66)),
@@ -313,3 +315,18 @@ audit_entries = Table(
     Column("details", JSONB, nullable=False, server_default=text("'{}'::jsonb")), created(),
 )
 Index("ix_audit_entries_entity", audit_entries.c.entity_type, audit_entries.c.entity_id)
+sessions = Table(
+    "sessions", metadata, pk(), Column("user_id", Uuid, ForeignKey("users.id"), nullable=False, index=True),
+    Column("token_hash", LargeBinary, nullable=False, unique=True), Column("csrf_hash", LargeBinary, nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False), created(),
+)
+rate_limits = Table(
+    "rate_limits", metadata, Column("key", String(64), primary_key=True),
+    Column("window_start", DateTime(timezone=True), nullable=False), Column("attempts", Integer, nullable=False),
+)
+email_messages = Table(
+    "email_messages", metadata, pk(), Column("recipient", String(254), nullable=False, index=True),
+    Column("subject", String(200), nullable=False), Column("encrypted_body", LargeBinary, nullable=False),
+    Column("status", String(16), nullable=False, server_default="pending"),
+    Column("attempts", Integer, nullable=False, server_default="0"), created(),
+)
